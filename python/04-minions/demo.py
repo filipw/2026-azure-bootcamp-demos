@@ -66,9 +66,9 @@ Rules:
 - Return ONLY a JSON array of task strings, nothing else
 - Format: ["task 1", "task 2", "task 3"]"""
 
-SYNTHESIZER_INSTRUCTIONS = """You are a science historian. You have received a list of facts extracted from a document about the history of physics.
+SYNTHESIZER_INSTRUCTIONS = """You are a document writer. You have received a list of facts extracted from a document.
 - Your task is to synthesize this information into a clear, structured answer to the user's original query.
-- Organize the information by scientist.
+- Organize the information.
 - Do not mention the extraction process, just provide the final answer."""
 
 EVALUATOR_INSTRUCTIONS_TEMPLATE = """You are an expert evaluator of AI-generated responses. Your task is to assess the quality of an answer given the original document, user query, and the generated response.
@@ -194,12 +194,6 @@ def create_transitions(state: MinionsState):
             print(f"Jobs created: {json.dumps(state.jobs, indent=2)}")
             return True
         except json.JSONDecodeError:
-            # Fallback to predefined jobs
-            state.jobs = [
-                "Find the contribution of Max Planck and the year it was made.",
-                "Find the contribution of Albert Einstein and the year it was made.",
-                "Find the contribution of Niels Bohr and the year it was made.",
-            ]
             print(f"Warning: Could not parse JSON. Using fallback jobs: {state.jobs}")
             return True
 

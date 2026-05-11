@@ -272,7 +272,7 @@ async def main():
 
         workflow = builder.build()
 
-        user_query = "Calculate ((5 + 3) * 10) / 2. Then divide this result by 4 and add 6."
+        user_query = "Calculate ((((5 + 3) * 10) / 2) / 4) + 4"
 
         print(f"🚀 Query: {user_query}")
 
