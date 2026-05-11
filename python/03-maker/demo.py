@@ -282,7 +282,6 @@ async def main():
                     print(f"\n==========================================")
                     print(f"🤖 Final State: {event.data.text.split('WORKFLOW_COMPLETE: ')[1]}")
                     print(f"==========================================")
-                    break
 
 if __name__ == "__main__":
     asyncio.run(main())
