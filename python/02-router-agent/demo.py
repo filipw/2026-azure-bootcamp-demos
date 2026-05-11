@@ -20,8 +20,6 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from local_models import create_local_client, LocalGenerationConfig
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
 load_dotenv()
 
 # 1. define the Routing Logic
@@ -89,24 +87,21 @@ async def main():
     # 2. Setup Clients
     model_path = os.environ.get("LOCAL_MODEL_PATH", "Phi-4-mini-instruct-4bit")
 
-    # router uses low temp for deterministic classification
-    router_client = create_local_client(model_path, LocalGenerationConfig(temp=0.1, max_tokens=10))
-
-    # worker uses standard config
-    worker_client = create_local_client(model_path)
+    # single local client shared by router and worker
+    local_client = create_local_client(model_path, LocalGenerationConfig(temp=0.1))
     
     # strong Model (Azure)
     async with AzureCliCredential() as credential:
         azure_client = AzureAIAgentClient(credential=credential)
         
         # 3. Define Agents
-        router_agent = RouterExecutor(client=router_client, state=validation_state)
+        router_agent = RouterExecutor(client=local_client, state=validation_state)
 
         # weak Worker: The 'Mw' model (Runs locally)
         weak_agent = ChatAgent(
             name="Weak_Model_Worker",
             instructions="You are a concise assistant. Answer the user's question directly.",
-            chat_client=worker_client
+            chat_client=local_client
         )
 
         # strong Worker: The 'Ms' model (Runs in Cloud)
@@ -136,7 +131,7 @@ async def main():
         # 5. run two demo queries
         queries = [
             # example 1: Complex -> Should route to Strong
-            "Explain the implications of quantum computing on cryptography",
+            "Explain shortly the implications of quantum computing on cryptography",
             
             # example 2: Simple -> Should route to Weak
             "What are the three primary colors?"

@@ -15,6 +15,9 @@ _MODEL_REGISTRY: dict[str, dict[str, str]] = {
     },
 }
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 def _resolve_model_path(model_path: str, backend: str) -> str:
     """Resolve a model path for the chosen backend.
