@@ -8,8 +8,8 @@
 // and applies majority-vote convergence (k_threshold=3 margin).
 //
 // Backend configuration (see dotnet/launchSettings.json.example):
-//   SLM_BACKEND  — inference backend for the SLM role (default: ollama)
-//   LLM_BACKEND  — inference backend for the LLM role (default: azure-ai)
+//   SLM_BACKEND  - inference backend for the SLM role (default: ollama)
+//   LLM_BACKEND  - inference backend for the LLM role (default: azure-ai)
 // =============================================================================
 
 using System.Text.Json;

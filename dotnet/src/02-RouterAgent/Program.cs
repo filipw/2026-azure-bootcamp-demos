@@ -7,8 +7,8 @@
 // queries go to the cloud LLM.
 //
 // Backend configuration (see dotnet/.env.example):
-//   SLM_BACKEND  — inference backend for the SLM role (default: ollama)
-//   LLM_BACKEND  — inference backend for the LLM role (default: azure-openai)
+//   SLM_BACKEND  - inference backend for the SLM role (default: ollama)
+//   LLM_BACKEND  - inference backend for the LLM role (default: azure-openai)
 // =============================================================================
 
 using HybridAgentDemos.Shared;

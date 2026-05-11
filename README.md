@@ -101,7 +101,7 @@ cp ../../launchSettings.json.example Properties/launchSettings.json
 # edit Properties/launchSettings.json and fill in your values
 ```
 
-> `Properties/launchSettings.json` is gitignored — your credentials stay local.
+> `Properties/launchSettings.json` is gitignored - your credentials stay local.
 
 ### Running
 

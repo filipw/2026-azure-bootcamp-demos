@@ -7,7 +7,7 @@ azure-ai-agents==1.2.0b5
 opentelemetry-semantic-conventions-ai==0.4.13
 pydantic>=2.0.0
 
-agent-framework-mlx==0.4.1       # Apple Silicon (MLX) — default
+agent-framework-mlx==0.4.1       # Apple Silicon (MLX) - default
 mlx==0.31.1                      # Pin: 0.31.2 broke thread-local GPU streams (mlx-lm#1090), fixed in 0.31.3 but not out on pypi yet
 mlx-lm==0.31.1                   # Pin: 0.31.2 broke thread-local GPU streams (mlx-lm#1090)
 transformers==4.50.0             # Cross-platform (Transformers)

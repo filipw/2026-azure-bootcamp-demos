@@ -9,8 +9,8 @@
 // receives the complete CU and synthesises the final answer.
 //
 // Backend configuration (see dotnet/launchSettings.json.example):
-//   SLM_BACKEND  — inference backend for the SLM role (default: ollama)
-//   LLM_BACKEND  — inference backend for the LLM role (default: azure-ai)
+//   SLM_BACKEND  - inference backend for the SLM role (default: ollama)
+//   LLM_BACKEND  - inference backend for the LLM role (default: azure-ai)
 // =============================================================================
 
 using HybridAgentDemos.Shared;
@@ -93,7 +93,7 @@ namespace ChainOfAgents
             if (cu.Length > MaxCuChars) cu = "..." + cu[^(MaxCuChars - 3)..];
 
             string cuSection = string.IsNullOrEmpty(cu)
-                ? "There is no previous summary yet — this is the first chunk."
+                ? "There is no previous summary yet - this is the first chunk."
                 : $"Here is the summary of the previous source text: {cu}";
 
             string prompt =
@@ -101,7 +101,7 @@ namespace ChainOfAgents
                 $"{cuSection}\n\n" +
                 $"Question that will be answered later: {query}\n\n" +
                 "Summarize ALL events from the current source text together with the previous summary. " +
-                "Include every event with its timestamp and details — do not skip events even if they " +
+                "Include every event with its timestamp and details - do not skip events even if they " +
                 "seem unrelated to the question. Do NOT invent or infer any events not explicitly stated. " +
                 "Output only the updated factual summary, 3-5 sentences, no commentary.";
 

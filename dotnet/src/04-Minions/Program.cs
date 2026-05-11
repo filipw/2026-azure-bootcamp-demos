@@ -9,8 +9,8 @@
 // Evaluator scores the answer quality.
 //
 // Backend configuration (see dotnet/.env.example):
-//   SLM_BACKEND  — inference backend for the SLM role (default: ollama)
-//   LLM_BACKEND  — inference backend for the LLM role (default: azure-openai)
+//   SLM_BACKEND  - inference backend for the SLM role (default: ollama)
+//   LLM_BACKEND  - inference backend for the LLM role (default: azure-openai)
 // =============================================================================
 
 using System.Diagnostics;
