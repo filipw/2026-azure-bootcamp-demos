@@ -54,6 +54,9 @@ async def main():
     queries = [
         # 1. Easy Fact (High Confidence)
         "What is the capital of France?",
+
+        # 1b. Tricky Fact (Low Confidence)
+        "What is the original capital of Poland?",
         
         # 2. Logic/Code (High Confidence)
         "Convert this list to a JSON array: Apple, Banana, Cherry",
@@ -63,9 +66,6 @@ async def main():
 
         # 4. Hallucination Trap
         "Explain in 2 sentences the role of quantum healing in modeling proteins.",
-        
-        # 5. Reasoning
-        "If I have a cabbage, a goat, and a wolf, and I need to cross a river but can only take one item at a time, and I can't leave the goat with the cabbage or the wolf with the goat, how do I do it?",
     ]
 
     local_config = LocalGenerationConfig(max_tokens=300)
