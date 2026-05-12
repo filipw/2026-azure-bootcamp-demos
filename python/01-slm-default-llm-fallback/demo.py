@@ -59,7 +59,7 @@ async def main():
         "What is the original capital of Poland?",
         
         # 2. Logic/Code (High Confidence)
-        "Convert this list to a JSON array: Apple, Banana, Cherry",
+        "Convert this list to a JSON array: Apple, Banana, Cherry. Return pure JSON no additional text or formatting.",
         
         # 3. Amiguous
         "Where is the city of Springfield located?",
