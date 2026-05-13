@@ -5,10 +5,9 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from agent_framework import ChatAgent, WorkflowBuilder, AgentRunUpdateEvent, AgentExecutorResponse
-from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework import Agent, WorkflowBuilder, AgentExecutorResponse, WorkflowEvent, AgentResponseUpdate, Executor, handler, WorkflowContext
 from azure.identity.aio import AzureCliCredential
-from agent_framework_azure_ai import AzureAIAgentClient
+from agent_framework_foundry import FoundryChatClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from local_models import create_local_client, LocalGenerationConfig
@@ -46,6 +45,14 @@ def inject_confidence(msgs):
     if msgs: msgs[-1]["content"] += "\nIMPORTANT: End response with 'CONFIDENCE: X' (1-10). If you are sure of your answer, you MUST output a score of 8 or higher."
     return msgs
 
+class InputForwarder(Executor):
+    def __init__(self):
+        super().__init__(id="Input")
+
+    @handler
+    async def forward(self, query: str, ctx: WorkflowContext[str]):
+        await ctx.send_message(query)
+
 async def main():
     print("====================================================")
     print("   Cascade Pattern with Microsoft Agent Framework")
@@ -82,20 +89,21 @@ async def main():
         # Agents hold conversation history, so for each query demoinstration we create a new pair of local/remote agents
         async with (
             AzureCliCredential() as credential,
-            AzureAIAgentClient(credential=credential).as_agent(
+            Agent(
+                FoundryChatClient(project_endpoint=os.environ.get("AZURE_AI_PROJECT_ENDPOINT"), model=os.environ.get("AZURE_AI_MODEL_DEPLOYMENT_NAME"), credential=credential),
                 name="Cloud_LLM",
                 instructions="You are a fallback expert. The previous assistant was unsure. Provide a complete answer.",
             ) as cloud_agent,
         ):
-            local_agent = ChatAgent(
-                name="Local_SLM",
+            local_agent = Agent(
+                local_client,
                 instructions="You are a helpful assistant.",
-                chat_client=local_client
+                name="Local_SLM",
             )
 
-            builder = WorkflowBuilder()
-            builder.set_start_executor(local_agent)
-            
+            input_forwarder = InputForwarder()
+            builder = WorkflowBuilder(start_executor=input_forwarder)
+            builder.add_edge(source=input_forwarder, target=local_agent)
             builder.add_edge(
                 source=local_agent,
                 target=cloud_agent,
@@ -106,8 +114,8 @@ async def main():
 
             current_agent = None
             
-            async for event in workflow.run_stream(q):
-                if isinstance(event, AgentRunUpdateEvent):
+            async for event in workflow.run(q, stream=True):
+                if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
                     if event.executor_id != current_agent:
                         if current_agent: print() 
                         current_agent = event.executor_id

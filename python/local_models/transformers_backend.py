@@ -5,12 +5,12 @@ from typing import Any, AsyncIterable, MutableSequence, Optional, Callable
 
 from agent_framework import (
     BaseChatClient,
-    ChatMessage,
+    Message,
     ChatOptions,
     ChatResponse,
     ChatResponseUpdate,
-    Role,
     Content,
+    ResponseStream,
     UsageDetails,
 )
 
@@ -58,16 +58,10 @@ class TransformersChatClient(BaseChatClient):
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
 
-    def _prepare_messages(self, messages: list[ChatMessage]) -> list[dict[str, str]]:
+    def _prepare_messages(self, messages: list[Message]) -> list[dict[str, str]]:
         msg_dicts: list[dict[str, str]] = []
         for m in messages:
-            if isinstance(m.role, Role):
-                role_str = m.role.value
-            elif isinstance(m.role, str):
-                role_str = m.role
-            else:
-                role_str = str(m.role)
-
+            role_str = str(m.role)
             content_str = m.text if hasattr(m, "text") else str(m.contents)
             msg_dicts.append({"role": role_str, "content": content_str})
 
@@ -77,7 +71,7 @@ class TransformersChatClient(BaseChatClient):
         return msg_dicts
 
 
-    def _prepare_inputs(self, messages: list[ChatMessage]):
+    def _prepare_inputs(self, messages: list[Message]):
         """Tokenize messages and return input_ids tensor + prompt token count."""
         msg_dicts = self._prepare_messages(messages)
 
@@ -113,49 +107,50 @@ class TransformersChatClient(BaseChatClient):
         return kwargs
 
 
-    async def _inner_get_response(
+    def _inner_get_response(
         self,
         *,
-        messages: MutableSequence[ChatMessage],
+        messages: MutableSequence[Message],
+        stream: bool = False,
         options: dict[str, Any] = {},
         **kwargs: Any,
-    ) -> ChatResponse:
-        inputs, prompt_tokens = self._prepare_inputs(list(messages))
-        gen_kwargs = self._build_generate_kwargs()
+    ):
+        if stream:
+            return ResponseStream(self._stream(list(messages)))
 
-        output_ids = await asyncio.to_thread(
-            self.model.generate,
-            **inputs,
-            **gen_kwargs,
-        )
+        async def _non_stream():
+            inputs, prompt_tokens = self._prepare_inputs(list(messages))
+            gen_kwargs = self._build_generate_kwargs()
 
-        # Decode only the new tokens
-        new_tokens = output_ids[0][prompt_tokens:]
-        response_text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+            output_ids = await asyncio.to_thread(
+                self.model.generate,
+                **inputs,
+                **gen_kwargs,
+            )
 
-        completion_tokens = len(new_tokens)
-        usage = UsageDetails(
-            input_token_count=prompt_tokens,
-            output_token_count=completion_tokens,
-            total_token_count=prompt_tokens + completion_tokens,
-        )
+            # Decode only the new tokens
+            new_tokens = output_ids[0][prompt_tokens:]
+            response_text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
 
-        return ChatResponse(
-            messages=[ChatMessage(role=Role.ASSISTANT, contents=[Content.from_text(text=response_text)])],
-            model_id=self.model_id,
-            usage_details=usage,
-        )
+            completion_tokens = len(new_tokens)
+            usage = UsageDetails(
+                input_token_count=prompt_tokens,
+                output_token_count=completion_tokens,
+                total_token_count=prompt_tokens + completion_tokens,
+            )
 
-    async def _inner_get_streaming_response(
-        self,
-        *,
-        messages: MutableSequence[ChatMessage],
-        options: dict[str, Any] = {},
-        **kwargs: Any,
-    ) -> AsyncIterable[ChatResponseUpdate]:
+            return ChatResponse(
+                messages=[Message("assistant", [Content.from_text(text=response_text)])],
+                model=self.model_id,
+                usage_details=usage,
+            )
+
+        return _non_stream()
+
+    async def _stream(self, messages: list[Message]) -> AsyncIterable[ChatResponseUpdate]:
         from transformers import TextIteratorStreamer
 
-        inputs, prompt_tokens = self._prepare_inputs(list(messages))
+        inputs, prompt_tokens = self._prepare_inputs(messages)
         gen_kwargs = self._build_generate_kwargs()
 
         streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
@@ -172,9 +167,9 @@ class TransformersChatClient(BaseChatClient):
             if chunk:
                 completion_tokens += len(self.tokenizer.encode(chunk, add_special_tokens=False))
                 yield ChatResponseUpdate(
-                    role=Role.ASSISTANT,
+                    role="assistant",
                     contents=[Content.from_text(text=chunk)],
-                    model_id=self.model_id,
+                    model=self.model_id,
                 )
 
         thread.join()
@@ -185,7 +180,7 @@ class TransformersChatClient(BaseChatClient):
             total_token_count=prompt_tokens + completion_tokens,
         )
         yield ChatResponseUpdate(
-            role=Role.ASSISTANT,
+            role="assistant",
             contents=[Content.from_usage(usage_details=usage)],
-            model_id=self.model_id,
+            model=self.model_id,
         )

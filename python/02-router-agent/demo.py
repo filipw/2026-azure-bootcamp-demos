@@ -3,17 +3,17 @@ import os
 import sys
 from typing import Literal
 from agent_framework import (
-    ChatAgent,
+    Agent,
     WorkflowBuilder,
-    AgentRunUpdateEvent,
+    WorkflowEvent,
+    AgentResponseUpdate,
     Executor,
     handler,
     WorkflowContext,
-    ChatMessage,
-    Role,
+    Message,
     BaseChatClient,
 )
-from agent_framework_azure_ai import AzureAIAgentClient
+from agent_framework_foundry import FoundryChatClient
 from azure.identity.aio import AzureCliCredential
 from dotenv import load_dotenv
 
@@ -58,8 +58,8 @@ class RouterExecutor(Executor):
     @handler
     async def route_query(self, query: str, ctx: WorkflowContext[str]):
         msgs = [
-            ChatMessage(role=Role.SYSTEM, text=ROUTER_INSTRUCTIONS),
-            ChatMessage(role=Role.USER, text=f"Input: \"{query}\"\nOutput:")
+            Message("system", [ROUTER_INSTRUCTIONS]),
+            Message("user", [f"Input: \"{query}\"\nOutput:"])
         ]
         
         response = await self.client.get_response(msgs)
@@ -92,27 +92,25 @@ async def main():
     
     # strong Model (Azure)
     async with AzureCliCredential() as credential:
-        azure_client = AzureAIAgentClient(credential=credential)
-        
         # 3. Define Agents
         router_agent = RouterExecutor(client=local_client, state=validation_state)
 
         # weak Worker: The 'Mw' model (Runs locally)
-        weak_agent = ChatAgent(
-            name="Weak_Model_Worker",
+        weak_agent = Agent(
+            local_client,
             instructions="You are a concise assistant. Answer the user's question directly.",
-            chat_client=local_client
+            name="Weak_Model_Worker",
         )
 
         # strong Worker: The 'Ms' model (Runs in Cloud)
-        strong_agent = azure_client.as_agent(
+        strong_agent = Agent(
+            FoundryChatClient(project_endpoint=os.environ.get("AZURE_AI_PROJECT_ENDPOINT"), model=os.environ.get("AZURE_AI_MODEL_DEPLOYMENT_NAME"), credential=credential),
             name="Strong_Model_Worker",
             instructions="You are an expert assistant. Provide detailed, reasoning-heavy answers.",
         )
 
         # 4. build the Workflow Graph
-        builder = WorkflowBuilder()
-        builder.set_start_executor(router_agent)
+        builder = WorkflowBuilder(start_executor=router_agent)
 
         builder.add_edge(
             source=router_agent,
@@ -145,8 +143,8 @@ async def main():
             validation_state.route = "WEAK"
 
             current_agent = None
-            async for event in workflow.run_stream(query):
-                if isinstance(event, AgentRunUpdateEvent):
+            async for event in workflow.run(query, stream=True):
+                if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
                     # print agent name changes
                     if event.executor_id != current_agent:
                         if current_agent: print() 
@@ -158,7 +156,6 @@ async def main():
                         print(event.data.text, end="", flush=True)
             print("\n" + "="*50)
             
-        await azure_client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

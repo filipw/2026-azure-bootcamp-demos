@@ -9,17 +9,18 @@ from typing import List
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from agent_framework import (
+    Agent,
     BaseChatClient,
-    ChatMessage,
+    Message,
     WorkflowBuilder,
     WorkflowContext,
     Executor,
     handler,
-    Role,
-    AgentRunUpdateEvent,
+    WorkflowEvent,
+    AgentResponseUpdate,
     AgentExecutorResponse,
 )
-from agent_framework_azure_ai import AzureAIAgentClient
+from agent_framework_foundry import FoundryChatClient
 from azure.identity.aio import AzureCliCredential
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -126,7 +127,7 @@ class LocalWorkerExecutor(Executor):
                 self.state.local_chars_processed += len(prompt)
 
                 response = await self.client.get_response(
-                    [ChatMessage(role=Role.USER, text=prompt)]
+                    [Message("user", [prompt])]
                 )
                 result = (response.messages[-1].text or "").strip()
 
@@ -220,19 +221,23 @@ async def main():
     parse_jobs, has_results = create_transitions(state)
 
     async with AzureCliCredential() as credential:
-        azure_client = AzureAIAgentClient(credential=credential)
+        azure_endpoint = os.environ.get("AZURE_AI_PROJECT_ENDPOINT")
+        azure_model = os.environ.get("AZURE_AI_MODEL_DEPLOYMENT_NAME")
 
-        decomposer = azure_client.as_agent(
+        decomposer = Agent(
+            FoundryChatClient(project_endpoint=azure_endpoint, model=azure_model, credential=credential),
             name="Cloud_Decomposer",
             instructions=DECOMPOSER_INSTRUCTIONS,
         )
 
-        synthesizer = azure_client.as_agent(
+        synthesizer = Agent(
+            FoundryChatClient(project_endpoint=azure_endpoint, model=azure_model, credential=credential),
             name="Cloud_Synthesizer",
             instructions=SYNTHESIZER_INSTRUCTIONS,
         )
 
-        evaluator = azure_client.as_agent(
+        evaluator = Agent(
+            FoundryChatClient(project_endpoint=azure_endpoint, model=azure_model, credential=credential),
             name="Cloud_Evaluator",
             instructions=EVALUATOR_INSTRUCTIONS_TEMPLATE.format(
                 document=QUANTUM_MECHANICS_HISTORY,
@@ -257,8 +262,7 @@ async def main():
         eval_formatter = EvalFormatterExecutor(state=state)
 
         # Cloud_Decomposer → (parse_jobs) → Local_Worker → (has_results) → Cloud_Synthesizer → Eval_Formatter → Cloud_Evaluator
-        builder = WorkflowBuilder()
-        builder.set_start_executor(decomposer)
+        builder = WorkflowBuilder(start_executor=decomposer)
         builder.add_edge(source=decomposer, target=local_worker, condition=parse_jobs)
         builder.add_edge(source=local_worker, target=synthesizer, condition=has_results)
         builder.add_edge(source=synthesizer, target=eval_formatter)
@@ -276,8 +280,8 @@ async def main():
 
         INTERNAL_EXECUTORS = {"Local_Worker", "Eval_Formatter"}
 
-        async for event in workflow.run_stream(decomposition_input):
-            if isinstance(event, AgentRunUpdateEvent):
+        async for event in workflow.run(decomposition_input, stream=True):
+            if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
                 if event.executor_id != current_agent:
                     if current_agent:
                         print()
@@ -327,8 +331,6 @@ async def main():
         print(f"\nAnswer Quality:")
         print(f"  - AI Judge Score: {eval_score}/5")
         print("=" * 50)
-
-        await azure_client.close()
 
 
 if __name__ == "__main__":

@@ -11,11 +11,10 @@ from agent_framework import (
     WorkflowContext,
     Executor,
     handler,
-    Role,
     AgentExecutorResponse,
-    ChatMessage
+    Message,
 )
-from agent_framework_azure_ai import AzureAIAgentClient
+from agent_framework_foundry import FoundryChatClient
 from azure.identity.aio import AzureCliCredential
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -98,7 +97,7 @@ class WorkerExecutor(Executor):
             "Output only the updated factual summary, 3-5 sentences, no commentary."
         )
         
-        response = await self.client.get_response([ChatMessage(role=Role.USER, text=prompt)])
+        response = await self.client.get_response([Message("user", [prompt])])
         output_text = response.messages[-1].text.strip()
         
         print(f"\n   [{self.id} ({self.worker_idx}/{self.total_workers})] Chunk processed. CU length: {len(output_text)} chars")
@@ -132,7 +131,7 @@ class ManagerExecutor(Executor):
         )
 
         print(f"\n\n   ☁️  {self.id}:\n   ", end="", flush=True)
-        response = await self.client.get_response([ChatMessage(role=Role.USER, text=prompt)])
+        response = await self.client.get_response([Message("user", [prompt])])
         print(response.messages[-1].text.strip())
 
 
@@ -166,12 +165,9 @@ async def main():
     
     # 2. Cloud LLM for the Manager (Stage 2)
     async with AzureCliCredential() as credential:
-        azure_client = AzureAIAgentClient(credential=credential)
-        manager = ManagerExecutor(name="Cloud_Manager", client=azure_client, query=query)
+        manager = ManagerExecutor(name="Cloud_Manager", client=FoundryChatClient(project_endpoint=os.environ.get("AZURE_AI_PROJECT_ENDPOINT"), model=os.environ.get("AZURE_AI_MODEL_DEPLOYMENT_NAME"), credential=credential), query=query)
         
         # 3. Build the sequential worker chain → manager
-        builder = WorkflowBuilder()
-        
         workers = []
         for i, chunk in enumerate(document_chunks):
             worker = WorkerExecutor(
@@ -183,8 +179,8 @@ async def main():
                 total_workers=len(document_chunks)
             )
             workers.append(worker)
-            
-        builder.set_start_executor(workers[0])
+
+        builder = WorkflowBuilder(start_executor=workers[0])
         
         for i in range(len(workers) - 1):
             builder.add_edge(source=workers[i], target=workers[i+1])
@@ -196,12 +192,11 @@ async def main():
         print("🚀 Starting Chain...\n")
 
         # Kick off with an empty CU (paper Algorithm 1: CU_0 ← empty string)
-        async for _ in workflow.run_stream(""):
+        async for _ in workflow.run("", stream=True):
             pass
 
         print("\n\n✅ Workflow Complete.")
         
-        await azure_client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

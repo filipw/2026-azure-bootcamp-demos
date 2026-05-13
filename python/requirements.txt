@@ -1,15 +1,12 @@
 python-dotenv
-agent-framework==1.0.0b260123
-agent-framework-azure-ai==1.0.0b260123
-agent-framework-mlx==0.4.1
-azure-ai-projects==2.0.0b3
+agent-framework==1.3.0
+agent-framework-azure-ai==1.0.0rc6
+agent-framework-mlx==0.6.0
+azure-ai-projects==2.1.0
 azure-ai-agents==1.2.0b5
 opentelemetry-semantic-conventions-ai==0.4.13
 pydantic>=2.0.0
 
-agent-framework-mlx==0.4.1       # Apple Silicon (MLX) - default
-mlx==0.31.1                      # Pin: 0.31.2 broke thread-local GPU streams (mlx-lm#1090), fixed in 0.31.3 but not out on pypi yet
-mlx-lm==0.31.1                   # Pin: 0.31.2 broke thread-local GPU streams (mlx-lm#1090)
-transformers==4.50.0             # Cross-platform (Transformers)
-torch>=2.0.0                     # Required by transformers backend
-accelerate>=0.26.0               # Required for device_map support
+transformers>=5.0.0
+torch>=2.0.0
+accelerate>=0.26.0 
