@@ -19,6 +19,7 @@ from agent_framework import (
     WorkflowEvent,
     AgentResponseUpdate,
     AgentExecutorResponse,
+    AgentResponse,
 )
 from agent_framework_foundry import FoundryChatClient
 from azure.identity.aio import AzureCliCredential
@@ -31,7 +32,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.getLogger("agent_framework").setLevel(logging.ERROR)
 load_dotenv()
 
-LOCAL_MODEL_PATH = os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit")
+LOCAL_MODEL_PATH = os.environ.get("LOCAL_MODEL_PATH", "phi-4-8bit")
 
 with open("quantum_mechanics_history.txt", "r", encoding="utf-8") as f:
     QUANTUM_MECHANICS_HISTORY = f.read()
@@ -112,7 +113,7 @@ class LocalWorkerExecutor(Executor):
         self.chunk_size = chunk_size
 
     @handler
-    async def handle_decomposer_response(self, message: AgentExecutorResponse, ctx: WorkflowContext[str]):
+    async def handle_decomposer_response(self, message: AgentExecutorResponse, ctx: WorkflowContext[AgentExecutorResponse]):
         jobs = self.state.jobs
         chunks = [self.document[i:i + self.chunk_size] for i in range(0, len(self.document), self.chunk_size)]
 
@@ -153,9 +154,19 @@ class LocalWorkerExecutor(Executor):
                 f"Extracted Information:\n{results_str}\n\n"
                 f"Please provide a final, synthesized answer."
             )
-            await ctx.send_message(synthesis_request)
+            user_msg = Message("user", [synthesis_request])
+            await ctx.send_message(AgentExecutorResponse(
+                executor_id=self.id,
+                agent_response=AgentResponse(messages=[user_msg]),
+                full_conversation=[user_msg],
+            ))
         else:
-            await ctx.send_message("NO_RESULTS")
+            no_result_msg = Message("assistant", ["NO_RESULTS"])
+            await ctx.send_message(AgentExecutorResponse(
+                executor_id=self.id,
+                agent_response=AgentResponse(messages=[no_result_msg]),
+                full_conversation=[no_result_msg],
+            ))
 
 
 class EvalFormatterExecutor(Executor):
@@ -166,7 +177,7 @@ class EvalFormatterExecutor(Executor):
         self.state = state
 
     @handler
-    async def format_for_eval(self, message: AgentExecutorResponse, ctx: WorkflowContext[str]):
+    async def format_for_eval(self, message: AgentExecutorResponse, ctx: WorkflowContext[AgentExecutorResponse]):
         self.state.final_answer = message.agent_response.text or ""
         eval_request = (
             f"Evaluate the following AI-generated answer.\n\n"
@@ -175,7 +186,12 @@ class EvalFormatterExecutor(Executor):
             f"Score: [1-5]\n"
             f"Reasoning: [Brief explanation of your assessment]"
         )
-        await ctx.send_message(eval_request)
+        user_msg = Message("user", [eval_request])
+        await ctx.send_message(AgentExecutorResponse(
+            executor_id=self.id,
+            agent_response=AgentResponse(messages=[user_msg]),
+            full_conversation=[user_msg],
+        ))
 
 
 def create_transitions(state: MinionsState):
@@ -198,9 +214,9 @@ def create_transitions(state: MinionsState):
             print(f"Warning: Could not parse JSON. Using fallback jobs: {state.jobs}")
             return True
 
-    def has_results(msg) -> bool:
+    def has_results(msg: AgentExecutorResponse) -> bool:
         """Only proceed to synthesis if the local worker found results."""
-        if isinstance(msg, str) and msg == "NO_RESULTS":
+        if isinstance(msg, AgentExecutorResponse) and (msg.agent_response.text or "").strip() == "NO_RESULTS":
             print("\nLocalLM could not find any relevant information. Halting.")
             return False
         return len(state.results) > 0

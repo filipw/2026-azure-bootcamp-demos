@@ -7,6 +7,8 @@ from agent_framework import (
     WorkflowBuilder,
     WorkflowEvent,
     AgentResponseUpdate,
+    AgentExecutorResponse,
+    AgentResponse,
     Executor,
     handler,
     WorkflowContext,
@@ -56,7 +58,7 @@ class RouterExecutor(Executor):
         self.state = state
 
     @handler
-    async def route_query(self, query: str, ctx: WorkflowContext[str]):
+    async def route_query(self, query: str, ctx: WorkflowContext[AgentExecutorResponse]):
         msgs = [
             Message("system", [ROUTER_INSTRUCTIONS]),
             Message("user", [f"Input: \"{query}\"\nOutput:"])
@@ -67,12 +69,17 @@ class RouterExecutor(Executor):
         
         if "ROUTE: STRONG" in decision_text:
             self.state.route = "STRONG"
-            print(f"   [🔀 Decision]: STRONG (Complex Query -> Azure)")
+            print("   [🔀 Decision]: STRONG (Complex Query -> Azure)")
         else:
             self.state.route = "WEAK"
-            print(f"   [🔀 Decision]: WEAK (Simple/Factual -> Local)")
+            print("   [🔀 Decision]: WEAK (Simple/Factual -> Local)")
             
-        await ctx.send_message(query)
+        user_msg = Message("user", [query])
+        await ctx.send_message(AgentExecutorResponse(
+            executor_id=self.id,
+            agent_response=AgentResponse(messages=[user_msg]),
+            full_conversation=[user_msg],
+        ))
 
 def is_route_strong(msg: object) -> bool: return validation_state.route == "STRONG"
 def is_route_weak(msg: object) -> bool: return validation_state.route == "WEAK"

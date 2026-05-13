@@ -21,6 +21,7 @@ from agent_framework import (
     ResponseStream,
     AgentResponseUpdate,
     AgentExecutorResponse,
+    AgentResponse,
     Content,
 )
 from agent_framework_foundry import FoundryChatClient
@@ -121,14 +122,14 @@ class VotingExecutor(Executor):
         return "PARSE_ERROR"
 
     @handler
-    async def handle_agent_response(self, message: AgentExecutorResponse, ctx: WorkflowContext[str]): 
+    async def handle_agent_response(self, message: AgentExecutorResponse, ctx: WorkflowContext[AgentExecutorResponse]): 
         await self._resolve_step(message.agent_response.text or "", ctx)
 
     @handler
-    async def handle_chat_message(self, message: Message, ctx: WorkflowContext[str]):
+    async def handle_chat_message(self, message: Message, ctx: WorkflowContext[AgentExecutorResponse]):
         await self._resolve_step(message.text or "", ctx)
 
-    async def _resolve_step(self, input_text: str, ctx: WorkflowContext[str]):
+    async def _resolve_step(self, input_text: str, ctx: WorkflowContext[AgentExecutorResponse]):
         
         if self.state.attempts == 0 and "Current Task:" in input_text:
             task_line = input_text.split("Current Task:")[1].split("\n")[0].strip()
@@ -172,7 +173,12 @@ class VotingExecutor(Executor):
             else:
                 status_msg = "RETRY"
 
-        await ctx.send_message(status_msg)
+        assistant_msg = Message("assistant", [status_msg])
+        await ctx.send_message(AgentExecutorResponse(
+            executor_id=self.id,
+            agent_response=AgentResponse(messages=[assistant_msg]),
+            full_conversation=[Message("user", [input_text]), assistant_msg],
+        ))
 
     def _commit_step(self, result: str):
         self.state.results.append(result)

@@ -5,7 +5,7 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from agent_framework import Agent, WorkflowBuilder, AgentExecutorResponse, WorkflowEvent, AgentResponseUpdate, Executor, handler, WorkflowContext
+from agent_framework import Agent, WorkflowBuilder, AgentExecutorResponse, AgentResponse, WorkflowEvent, AgentResponseUpdate, Executor, handler, WorkflowContext, Message
 from azure.identity.aio import AzureCliCredential
 from agent_framework_foundry import FoundryChatClient
 
@@ -42,7 +42,8 @@ def should_fallback_to_cloud(message: AgentExecutorResponse) -> bool:
     return False
 
 def inject_confidence(msgs): 
-    if msgs: msgs[-1]["content"] += "\nIMPORTANT: End response with 'CONFIDENCE: X' (1-10). You are allowed to  output a score of 8 or higher ONLY IF you are very sure of your answer."
+    if msgs: 
+        msgs[-1]["content"] += "\nIMPORTANT: End response with 'CONFIDENCE: X' (1-10). You are allowed to  output a score of 8 or higher ONLY IF you are very sure of your answer."
     return msgs
 
 class InputForwarder(Executor):
@@ -50,8 +51,13 @@ class InputForwarder(Executor):
         super().__init__(id="Input")
 
     @handler
-    async def forward(self, query: str, ctx: WorkflowContext[str]):
-        await ctx.send_message(query)
+    async def forward(self, query: str, ctx: WorkflowContext[AgentExecutorResponse]):
+        user_msg = Message("user", [query])
+        await ctx.send_message(AgentExecutorResponse(
+            executor_id=self.id,
+            agent_response=AgentResponse(messages=[user_msg]),
+            full_conversation=[user_msg],
+        ))
 
 async def main():
     print("====================================================")
@@ -63,7 +69,7 @@ async def main():
         "What is the capital of France?",
 
         # 1b. Tricky Fact
-        "In which year was Wisloka Debica founded??",
+        "In which year was Wisloka Debica founded?",
         
         # 2. Extraction
         "Convert this list to a JSON array: Apple, Banana, Cherry. Return pure JSON no additional text or formatting.",
@@ -72,13 +78,14 @@ async def main():
         "Where is the city of Springfield located?",
 
         # 4. Hallucination Trap
-        "Explain in 2 sentences the role of quantum annealing in modeling proteins.",
+        "Explain in 2 sentences the role of quantum healing in modeling proteins.",
     ]
 
     local_config = LocalGenerationConfig(max_tokens=300)
     local_client = create_local_client(
         model_path=os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit"),
         generation_config=local_config,
+        message_preprocessor=inject_confidence,
     )
 
     for q in queries:
