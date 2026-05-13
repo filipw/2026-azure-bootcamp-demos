@@ -85,7 +85,7 @@ async def main():
     print("====================================================\n")
 
     # 2. Setup Clients
-    model_path = os.environ.get("LOCAL_MODEL_PATH", "Phi-4-mini-instruct-4bit")
+    model_path = os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit")
 
     # single local client shared by router and worker
     local_client = create_local_client(model_path, LocalGenerationConfig(temp=0.1))

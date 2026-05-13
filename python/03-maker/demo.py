@@ -18,9 +18,7 @@ from agent_framework import (
     handler,
     BaseChatClient,
     ChatResponse,
-    ChatOptions,
     ResponseStream,
-    WorkflowEvent,
     AgentResponseUpdate,
     AgentExecutorResponse,
     Content,
@@ -127,7 +125,7 @@ class VotingExecutor(Executor):
         await self._resolve_step(message.agent_response.text or "", ctx)
 
     @handler
-    async def handle_chat_message(self, message: Message, ctx: WorkflowContext[Message]):
+    async def handle_chat_message(self, message: Message, ctx: WorkflowContext[str]):
         await self._resolve_step(message.text or "", ctx)
 
     async def _resolve_step(self, input_text: str, ctx: WorkflowContext[str]):
@@ -146,7 +144,7 @@ class VotingExecutor(Executor):
         if ans == "PARSE_ERROR":
             print(f"   ❌ Attempt {self.state.attempts}: Parse Error")
             if self.state.attempts >= self.state.max_attempts:
-                 print(f"   ⚠️ ABORTING STEP: Parse Error Limit Reached")
+                 print("   ⚠️ ABORTING STEP: Parse Error Limit Reached")
                  status_msg = "RESOLVED: ERROR"
                  self._commit_step("ERROR")
             else:
@@ -174,7 +172,7 @@ class VotingExecutor(Executor):
             else:
                 status_msg = "RETRY"
 
-        await ctx.send_message(Message("assistant", [status_msg]))
+        await ctx.send_message(status_msg)
 
     def _commit_step(self, result: str):
         self.state.results.append(result)
@@ -184,21 +182,8 @@ class VotingExecutor(Executor):
         if self.state.current_step_idx >= len(self.state.steps):
             self.state.is_complete = True
 
-class DecompositionPlan(BaseModel):
-    model_config = {"extra": "forbid"}
-    steps: List[str] = Field(description="A list of imperative instructions (e.g. 'Add 5 and 3'). Do NOT include results (e.g. '5+3=8').")
-
 def create_transitions(state: MakerState):
     def parse_plan(response: AgentExecutorResponse) -> bool:
-        # Check for structured output first
-        if getattr(response.agent_response, "value", None) and isinstance(response.agent_response.value, DecompositionPlan):
-             raw_steps = response.agent_response.value.steps
-             state.steps = raw_steps
-             print("\n📋 DECOMPOSITION PLAN (Structured):")
-             print(json.dumps(state.steps, indent=2))
-             print("-" * 40)
-             return True
-
         text = response.agent_response.text or "[]"
         clean_text = text.replace("```json", "").replace("```", "").strip()
         try:
@@ -238,10 +223,9 @@ async def main():
                 "3. FORWARD REFERENCES: Refer to the output of previous steps as 'the result', 'the output', or 'the previous state'. Do not assume you know what the value is.\n"
                 "4. DATA FIDELITY: Preserve specific names, numbers, and entities from the user's request exactly.\n"
                 "5. NO PREDICTIONS: Do not predict, simulate, or include the outcome of the steps in the instructions.\n"
-                "6. FORMAT: Return a list of strings where each string is an imperative instruction.\n"
+                "6. FORMAT: Return ONLY a JSON array of strings, e.g. [\"step 1\", \"step 2\"]. No markdown, no extra text.\n"
                 "7. NO EQUALS SIGNS: Do not use '=' to show results.\n"
             ),
-            default_options={"response_format": DecompositionPlan},
         ) as cloud_planner,
     ):
         manager = Agent(
@@ -252,7 +236,7 @@ async def main():
         
         local_config = LocalGenerationConfig(max_tokens=300, temp=0.8)
         local_client = create_local_client(
-            model_path=os.environ.get("LOCAL_MODEL_PATH", "Phi-4-mini-instruct-4bit"),
+            model_path=os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit"),
             generation_config=local_config,
             message_preprocessor=ensure_stateless,
         )
@@ -277,9 +261,9 @@ async def main():
         async for event in workflow.run(user_query, stream=True):
             if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
                 if event.executor_id == "Manager" and "WORKFLOW_COMPLETE" in (event.data.text or ""):
-                    print(f"\n==========================================")
+                    print("\n==========================================")
                     print(f"🤖 Final State: {event.data.text.split('WORKFLOW_COMPLETE: ')[1]}")
-                    print(f"==========================================")
+                    print("==========================================")
 
 if __name__ == "__main__":
     asyncio.run(main())

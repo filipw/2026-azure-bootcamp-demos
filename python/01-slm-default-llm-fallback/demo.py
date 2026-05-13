@@ -42,7 +42,7 @@ def should_fallback_to_cloud(message: AgentExecutorResponse) -> bool:
     return False
 
 def inject_confidence(msgs): 
-    if msgs: msgs[-1]["content"] += "\nIMPORTANT: End response with 'CONFIDENCE: X' (1-10). If you are sure of your answer, you MUST output a score of 8 or higher."
+    if msgs: msgs[-1]["content"] += "\nIMPORTANT: End response with 'CONFIDENCE: X' (1-10). You are allowed to  output a score of 8 or higher ONLY IF you are very sure of your answer."
     return msgs
 
 class InputForwarder(Executor):
@@ -59,27 +59,26 @@ async def main():
     print("====================================================\n")
 
     queries = [
-        # 1. Easy Fact (High Confidence)
+        # 1. Easy Fact
         "What is the capital of France?",
 
-        # 1b. Tricky Fact (Low Confidence)
-        "What is the original capital of Poland?",
+        # 1b. Tricky Fact
+        "In which year was Wisloka Debica founded??",
         
-        # 2. Logic/Code (High Confidence)
+        # 2. Extraction
         "Convert this list to a JSON array: Apple, Banana, Cherry. Return pure JSON no additional text or formatting.",
         
         # 3. Amiguous
         "Where is the city of Springfield located?",
 
         # 4. Hallucination Trap
-        "Explain in 2 sentences the role of quantum healing in modeling proteins.",
+        "Explain in 2 sentences the role of quantum annealing in modeling proteins.",
     ]
 
     local_config = LocalGenerationConfig(max_tokens=300)
     local_client = create_local_client(
-        model_path=os.environ.get("LOCAL_MODEL_PATH", "Phi-4-mini-instruct-4bit"),
+        model_path=os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit"),
         generation_config=local_config,
-        message_preprocessor=inject_confidence,
     )
 
     for q in queries:
@@ -97,7 +96,7 @@ async def main():
         ):
             local_agent = Agent(
                 local_client,
-                instructions="You are a helpful assistant.",
+                instructions="You are a helpful assistant. Always end your response with 'CONFIDENCE: X' where X is a number from 1-10 reflecting how confident you are in your answer. If you are sure of your answer, you MUST output a score of 8 or higher.",
                 name="Local_SLM",
             )
 

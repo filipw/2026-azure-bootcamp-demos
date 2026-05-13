@@ -31,7 +31,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.getLogger("agent_framework").setLevel(logging.ERROR)
 load_dotenv()
 
-LOCAL_MODEL_PATH = os.environ.get("LOCAL_MODEL_PATH", "Phi-4-mini-instruct-8bit")
+LOCAL_MODEL_PATH = os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit")
 
 with open("quantum_mechanics_history.txt", "r", encoding="utf-8") as f:
     QUANTUM_MECHANICS_HISTORY = f.read()

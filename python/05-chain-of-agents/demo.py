@@ -2,16 +2,13 @@ import os
 import sys
 import asyncio
 import logging
-from typing import List
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
 
 from agent_framework import (
     WorkflowBuilder,
     WorkflowContext,
     Executor,
     handler,
-    AgentExecutorResponse,
     Message,
 )
 from agent_framework_foundry import FoundryChatClient
@@ -70,10 +67,6 @@ class WorkerExecutor(Executor):
 
     @handler
     async def process_chunk(self, message: str, ctx: WorkflowContext[str]):
-        # Extract the CU text from the previous worker's output
-        if hasattr(message, "agent_response") and hasattr(message.agent_response, "text"):
-            message = message.agent_response.text or ""
-
         previous_cu = truncate_cu(message.strip())
         
         # Handle the first worker (no previous CU yet - paper: CU_0 = empty)
@@ -117,8 +110,6 @@ class ManagerExecutor(Executor):
 
     @handler
     async def synthesize(self, message: str, ctx: WorkflowContext[str]):
-        if hasattr(message, "agent_response") and hasattr(message.agent_response, "text"):
-            message = message.agent_response.text or ""
         final_cu = message.strip()
 
         # CU + question + "Answer:" nudge for the manager
@@ -158,7 +149,7 @@ async def main():
     # 1. Local SLM for the Workers (Stage 1)
     local_config = LocalGenerationConfig(max_tokens=250, temp=0.1, repetition_penalty=1.15)
     local_client = create_local_client(
-        model_path=os.environ.get("LOCAL_MODEL_PATH", "Phi-4-mini-instruct-8bit"),
+        model_path=os.environ.get("LOCAL_MODEL_PATH", "phi-4-4bit"),
         generation_config=local_config,
         message_preprocessor=ensure_stateless,
     )
