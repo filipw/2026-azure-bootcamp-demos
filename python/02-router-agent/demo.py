@@ -42,7 +42,7 @@ Output: ROUTE: STRONG
 Input: "Summarize this short text."
 Output: ROUTE: WEAK
 
-Input: "Explain the implications of quantum computing on modern cryptography."
+Input: "Explain the mathematical difference between matrix mechanics and wave mechanics in quantum mechanics."
 Output: ROUTE: STRONG
 
 You must output ONLY 'ROUTE: WEAK' or 'ROUTE: STRONG'. Do not answer the user query.
@@ -139,7 +139,7 @@ async def main():
             "Explain shortly the implications of quantum computing on cryptography",
             
             # example 2: Simple -> Should route to Weak
-            "What are the three primary colors?"
+            "Write a haiku about ice hockey"
         ]
 
         for query in queries:
