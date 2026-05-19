@@ -5,7 +5,7 @@ import asyncio
 import logging
 import time
 import re
-from typing import List
+from typing import Dict, List
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from agent_framework import (
@@ -40,7 +40,7 @@ with open("quantum_mechanics_history.txt", "r", encoding="utf-8") as f:
 class MinionsState(BaseModel):
     user_query: str = ""
     jobs: List[str] = Field(default_factory=list)
-    results: List[str] = Field(default_factory=list)
+    results: Dict[str, List[str]] = Field(default_factory=dict)
     final_answer: str = ""
     local_chars_processed: int = 0
 
@@ -62,9 +62,11 @@ Task: Based ONLY on the text in the 'Context' above, {job}
 DECOMPOSER_INSTRUCTIONS = """You are a task decomposition expert. Your job is to break down a user's complex query into simple, atomic extraction tasks.
 
 Rules:
-- Each task should be a single, focused question that can be answered from a text chunk
+- Each task should be a single, focused question that can be answered from a text chunk. 
 - Tasks should be specific and actionable (e.g., "Find X and the year Y") and intended for finding information in the attached text
-- Create 3-7 tasks depending on the complexity of the query
+- Tasks should not depend on other tasks
+- Tasks should be self contained (possible to execute without knowing the original query). Do not refer to objects and subjects from the original query using "it/he/she", but mention them by name explicitly.
+- Create 2-4 tasks depending on the complexity of the query
 - Return ONLY a JSON array of task strings, nothing else
 - Format: ["task 1", "task 2", "task 3"]"""
 
@@ -137,7 +139,7 @@ class LocalWorkerExecutor(Executor):
 
                 if not is_failure and result:
                     print(f"  - SUCCESS: Found relevant result in chunk {i + 1}!")
-                    self.state.results.append(result)
+                    self.state.results.setdefault(job, []).append(result)
                 else:
                     print(f"  - No relevant info found in chunk {i + 1}.")
 
@@ -145,13 +147,19 @@ class LocalWorkerExecutor(Executor):
 
         duration = time.time() - start_time
         print(f"Local job execution finished in {duration:.2f}s.")
-        print(f"Filtered results to be sent to RemoteLM: {self.state.results}")
+        total_results = sum(len(v) for v in self.state.results.values())
+        print(f"Filtered results to be sent to RemoteLM: {total_results} answers across {len(self.state.results)} jobs")
+        print(f"  {self.state.results}")
 
         if self.state.results:
-            results_str = "\n".join([f"- {res}" for res in self.state.results])
+            results_parts = []
+            for job, answers in self.state.results.items():
+                answers_str = "\n".join([f"  - {a}" for a in answers])
+                results_parts.append(f"Job: {job}\nAnswers:\n{answers_str}")
+            results_str = "\n\n".join(results_parts)
             synthesis_request = (
                 f"Original Query: {self.state.user_query}\n\n"
-                f"Extracted Information:\n{results_str}\n\n"
+                f"Extracted Information (grouped by task):\n{results_str}\n\n"
                 f"Please provide a final, synthesized answer."
             )
             user_msg = Message("user", [synthesis_request])
@@ -219,7 +227,7 @@ def create_transitions(state: MinionsState):
         if isinstance(msg, AgentExecutorResponse) and (msg.agent_response.text or "").strip() == "NO_RESULTS":
             print("\nLocalLM could not find any relevant information. Halting.")
             return False
-        return len(state.results) > 0
+        return any(state.results.values())
 
     return parse_jobs, has_results
 
@@ -230,7 +238,7 @@ async def main():
     print("      MINIONS Protocol Demo (Agent Framework)")
     print("=" * 50)
 
-    user_query = "what did Planck, Einstein, and Bohr contribute to quantum mechanics?"
+    user_query = "what did Planck and Bohr contribute to quantum mechanics and who developed the relativistic description of the wavefunction?"
     print(f"\nUser Query: {user_query}")
 
     state = MinionsState(user_query=user_query)
@@ -343,7 +351,7 @@ async def main():
         print(f"\nCost & Efficiency Analysis (using character counts):")
         print(f"  - Characters processed by FREE LocalLM: ~{state.local_chars_processed}")
         print(f"  - Jobs created by cloud: {len(state.jobs)}")
-        print(f"  - Results extracted locally: {len(state.results)}")
+        print(f"  - Results extracted locally: {sum(len(v) for v in state.results.values())} answers across {len(state.results)} jobs")
         print(f"\nAnswer Quality:")
         print(f"  - AI Judge Score: {eval_score}/5")
         print("=" * 50)
