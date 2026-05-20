@@ -72,7 +72,7 @@ async def main():
         "In which year was Wisloka Debica founded?",
         
         # 2. Extraction
-        "Convert this list to a JSON array: Apple, Banana, Cherry. Return pure JSON no additional text or formatting.",
+        "Convert this list to a JSON shopping list: Apple 2 items, Banana 3 items, Cherries 1 item. Return pure JSON no additional text or formatting.",
         
         # 3. Amiguous
         "Where is the city of Springfield located?",
